@@ -27,6 +27,8 @@ defmodule Norm.Contract do
 
   """
 
+  defstruct [:args, :result]
+
   @doc false
   def __before_compile__(env) do
     contracts = Module.get_attribute(env.module, :norm_contracts)
@@ -112,8 +114,13 @@ defmodule Norm.Contract do
         end
       end
 
-    conform_args =
+    arg_specs =
       for {:"::", _, [{arg_name, _, _}, spec]} <- arg_specs do
+        {arg_name, spec}
+      end
+
+    conform_args =
+      for {arg_name, spec} <- arg_specs do
         arg = Macro.var(arg_name, nil)
 
         quote do
@@ -125,6 +132,11 @@ defmodule Norm.Contract do
     result = Macro.var(:result, nil)
     call = {name, call_meta, arg_vars}
 
+    contract = [
+      args: arg_specs,
+      result: result_spec,
+    ]
+
     quote do
       @norm_contracts unquote(fa(call))
 
@@ -134,7 +146,26 @@ defmodule Norm.Contract do
         Norm.conform!(unquote(result), unquote(result_spec))
         unquote(result)
       end
+
+      def __contract__(unquote(fa(call))) do
+        struct!(Norm.Contract, unquote(contract))
+      end
     end
+  end
+
+  @doc """
+  Call given `module`, `function, `args` and ensure it conforms to the given `contract`.
+  """
+  def conform(module, function, args, contract) do
+    args =
+      for {value, {_name, spec}} <- Enum.zip(args, contract.args) do
+        Norm.conform!(value, spec)
+        value
+      end
+
+    result = apply(module, function, args)
+    Norm.conform!(result, contract.result)
+    result
   end
 
   ## Utilities

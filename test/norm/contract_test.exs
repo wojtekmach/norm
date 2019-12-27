@@ -69,4 +69,20 @@ defmodule Norm.ContractTest do
       end
     end
   end
+
+  test "__contract__" do
+    defmodule Reflection do
+      use Norm
+
+      def string(), do: spec(is_binary())
+
+      @contract foo(x :: spec(is_integer())) :: string()
+      def foo(x) do
+        Integer.to_string(x)
+      end
+    end
+
+    contract = Reflection.__contract__({:foo, 1})
+    assert Norm.Contract.conform(Reflection, :foo, [1], contract) == "1"
+  end
 end
